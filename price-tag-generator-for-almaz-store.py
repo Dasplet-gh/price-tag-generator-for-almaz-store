@@ -13,7 +13,7 @@ PAGE_HEIGHT = A4_HEIGHT_MM * PAGE_SCALING  # Высота листа
 
 FONT_NAME = "Arial Bold"                   # Название основного шрифта
 FONT_FILE_NAME = "arialbd.ttf"             # Название файла основного шрифта
-FONT_SIZE_TITLE = 40                       # Размер шрифта для названия товара
+FONT_SIZE_TITLE = 32                       # Размер шрифта для названия товара
 FONT_SIZE_PRICE = 120                      # Размер шрифта для цены товара
 WIDTH_TAG_FRAME = 4                        # Ширина рамки ценника
 
@@ -28,16 +28,139 @@ def choose_file():
     if filepath:
         # Скрытие стартового экрана
         start_screen_hide()
+        root.update()
         # Показ экрана прогресса
         progress_screen_show()
+        root.update()
 
         # Основной алгоритм генерации страниц с ценниками
         generate_tags(filepath)
 
         # Скрытие экрана прогресса
         progress_screen_hide()
+        root.update()
         # Показываем кнопку
         start_screen_show()
+        root.update()
+
+def draw_wrapped_title_text(draw, text, max_width, max_height, start_x, start_y, margin, line_spacing=5):
+    # Учёт отступов
+    max_width -= 2 * margin
+    max_height -= 2 * margin
+    start_x += margin
+    start_y += margin
+
+    # Шрифт для названия товара
+    font = ImageFont.truetype(FONT_FILE_NAME, FONT_SIZE_TITLE)
+
+    # Линии/строки текста
+    lines = []         # Список строк
+    current_line = ""  # Текущая строка
+
+    # Позиция по Y относительно ценника
+    y = 0
+
+    # Генерация списка строк текста
+    for idx, word in enumerate(text.split()):
+        # Тестовая версия строки
+        test_line = current_line + (" " if current_line else "") + word
+
+        # Ширина и высота получившейся строки
+        bbox = draw.textbbox((0, 0), test_line, font=font)
+        line_width = bbox[2] - bbox[0]
+        line_height = bbox[3] - bbox[1]
+
+        # Продвижение позиции по Y для проверки
+        y += line_height
+
+        # Если строка вышла за рамки по высоте
+        if y > max_height and lines:
+            # Последняя строка
+            last_line = lines[-1]
+
+            # Ширина последней строки с троеточием
+            bbox = draw.textbbox((0, 0), last_line + "...", font=font)
+            last_line_width = bbox[2] - bbox[0]
+
+            # Если ширина последней строки с троеточием подходящая
+            if last_line_width <= max_width:
+                # Обновляем прошлую строку
+                lines[-1] = last_line + "..."
+            else:
+                # Обновляем прошлую строку
+                lines[-1] = (" ".join(lines[-1].split()[0:-1]) if lines[-1] else "") + "..."
+
+            # Останавливаем генерацию списка
+            break
+
+        # Если строка не вышла за рамки по ширин
+        if line_width <= max_width and idx < len(text.split()) - 1:
+            # Обновляем текущую строку
+            current_line = test_line
+            # Откатываем продвижение позиции по Y
+            y -= line_height
+        else:
+            # Добавляем текущую версию строки
+            if current_line:
+                lines.append(current_line)
+
+            # Записываем не поместившееся слово на новую строку
+            current_line = word
+
+            # Продвижение позиции по Y
+            y += line_spacing
+
+    # Обнуление позиции по Y относительно страницы
+
+    y = start_y
+
+    # Рисование строк текста
+    for line in lines:
+        # Расчёт ширины и высоты строки
+        bbox = draw.textbbox((0, 0), line, font=font)
+        # line_width = bbox[2] - bbox[0] # Пока не нужно
+        line_height = bbox[3] - bbox[1]
+
+        # Позиция по X
+        # x = start_x + (max_width - line_width) / 2 # Центрирование
+        # x = start_x + (max_width - line_width) # Выравнивание по правому краю
+        x = start_x # Выравнивание по левому краю
+
+        # Рисуем строку на изображении
+        draw.text((x, y), line, fill="black", font=font)
+
+        # Продвижение позиции по Y
+        y += line_height + line_spacing
+
+# def draw_price_text(draw, price_text, max_width, max_height, start_x, start_y, margin): # ⚠️ ₽ и шт
+#     # Учёт отступов
+#     max_width -= 2 * margin
+#     max_height -= 2 * margin
+#     start_x += margin
+#     start_y += margin
+#
+#     # Базовый шрифт
+#     font_size = FONT_SIZE_PRICE
+#     font = ImageFont.truetype(FONT_FILE_NAME, font_size)
+#
+#     # Проверка, помещается ли цена
+#     bbox = draw.textbbox((0, 0), price_text, font=font)
+#     w, h = bbox[2] - bbox[0], bbox[3] - bbox[1]
+#
+#     # Если не помещается — уменьшаем шрифт
+#     while (w > max_width or h > max_height) and font_size > 10:
+#         font_size -= 2  # Плавно уменьшаем размер
+#         font = ImageFont.truetype(FONT_FILE_NAME, font_size)
+#         bbox = draw.textbbox((0, 0), price_text, font=font)
+#         w, h = bbox[2] - bbox[0], bbox[3] - bbox[1]
+#
+#     # Рисуем цену
+#     draw.text(
+#         (start_x + (max_width - w) / 2, start_y + (max_height - h) / 2),
+#         price_text,
+#         fill="black",
+#         font=font
+#     )
 
 def generate_tags(filepath):
     try:
@@ -61,8 +184,7 @@ def generate_tags(filepath):
         tag_height = (PAGE_HEIGHT - 2 * page_margin) / tags_per_col  # Длина ценника
 
         # Шрифты
-        font_title = ImageFont.truetype(FONT_FILE_NAME, FONT_SIZE_TITLE)  # Шрифт для названия товара
-        font_price = ImageFont.truetype(FONT_FILE_NAME, FONT_SIZE_PRICE)  # Шрифт для цены товара
+        # font_price = ImageFont.truetype(FONT_FILE_NAME, FONT_SIZE_PRICE)  # Шрифт для цены товара
 
         # Прочее
         current_tag = 0           # Количество записанных ценников
@@ -79,41 +201,40 @@ def generate_tags(filepath):
 
             # Рамка ценника
             draw.rectangle([x, y, x + tag_width, y + tag_height], outline="black", width=WIDTH_TAG_FRAME)
-
-            # Название товара                                                            # ⚠️
-            text_name = str(name)
-            bbox_name = draw.textbbox((0, 0), text_name, font=font_title)
-            w_name = bbox_name[2] - bbox_name[0]
-            draw.text(
-                (x + (tag_width - w_name) / 2, y + 50),
-                text_name,
-                fill="black",
-                font=font_title
+            # Дополнительная рамка ценников для одинаковой ширины всех линий
+            draw.rectangle(
+                [x - WIDTH_TAG_FRAME, y - WIDTH_TAG_FRAME,
+                 x + tag_width + WIDTH_TAG_FRAME, y + tag_height + WIDTH_TAG_FRAME],
+                outline="black", width=WIDTH_TAG_FRAME
             )
 
-            # Цена товара                                                                # ⚠️
-            text_price = f"{price}₽"
-            bbox_price = draw.textbbox((0, 0), text_price, font=font_price)
-            w_price = bbox_price[2] - bbox_price[0]
-            draw.text(
-                (x + (tag_width - w_price) / 2, y + tag_height / 2),
-                text_price,
-                fill="black",
-                font=font_price
+            # -=-=-=-=-=-=-=-=-=-=-=-=-=-=- Отрисовка названия товара -=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+            draw_wrapped_title_text(
+                draw,            #
+                str(name),       # Название товара
+                tag_width,       # Максимальная ширина под название
+                tag_height / 2,  # Половина высоты ценника под название
+                x,               # Начальная позиция X
+                y,               # Начальная позиция Y
+                10               # Отступ от краёв ценника
             )
+
+            # -=-=-=-=-=-=-=-=-=-=-=-=-=-=- Отрисовка цены товара -=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+            # draw_price_text(
+            #     draw,                #
+            #     str(price),          # Цена товара
+            #     tag_width,           # Максимальная ширина под цену
+            #     tag_height / 2,      # Половина высоты ценника под цену
+            #     x,                   # Начальная позиция X
+            #     y + tag_height / 2,  # Начальная позиция Y
+            #     10                   # Отступ от краёв ценника
+            # )
 
             # +1 созданный ценник
             current_tag += 1
 
             # Проверка заполненности страницы
             if current_tag % max_tags_per_page == 0:
-                # Дополнительная рамка ценников для одинаковой ширины всех линий
-                draw.rectangle([
-                    page_margin - WIDTH_TAG_FRAME,
-                    page_margin - WIDTH_TAG_FRAME,
-                    PAGE_WIDTH - page_margin + WIDTH_TAG_FRAME,
-                    PAGE_HEIGHT - page_margin + WIDTH_TAG_FRAME
-                ], outline="black", width=WIDTH_TAG_FRAME)
                 # Сохранение страницы в итоговый список
                 pages.append(page)
                 # Создание следующей страницы
@@ -127,6 +248,7 @@ def generate_tags(filepath):
 
         # Добавляем последнюю страницу
         if current_tag % max_tags_per_page != 0:
+            # Сохранение страницы в итоговый список
             pages.append(page)
 
         # Спросить папку для сохранения
@@ -172,7 +294,7 @@ def start_screen_hide():
     margin_label.pack_forget()
 
 def progress_screen_show():
-    progress_label.pack(expand=True, anchor="center")
+    progress_label.pack(anchor="center")
 
 def progress_screen_hide():
     progress_label.pack_forget()
@@ -193,6 +315,7 @@ max_rows_and_columns = 16
 margin_options = [0, 5, 10]
 width_of_boxes = len(str(max_rows_and_columns))
 main_font = (FONT_NAME, 16, "bold")
+progress_label_font = (FONT_NAME, 20, "bold")
 font_of_boxes = (FONT_NAME, 12, "bold")
 font_of_labels_of_boxes = (FONT_NAME, 10)
 
@@ -231,7 +354,7 @@ margin_combo = ttk.Combobox(
 start_screen_show()
 
 # Надпись прогресса
-progress_label = tkinter.Label(root, text="Прогресс: 0%", font=main_font)
+progress_label = tkinter.Label(root, text="Прогресс: 0%", font=progress_label_font)
 
 # Зацикливание
 root.mainloop()
