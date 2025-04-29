@@ -2,23 +2,30 @@ import tkinter
 from tkinter import filedialog, messagebox, ttk
 from PIL import Image, ImageDraw, ImageFont
 import pandas as pd
+import threading
 import os
+
+"""
+!!!!!!СДЕЛАТЬ ДИНАМИЧЕСКОЕ ИЗМЕНЕНИЕ РАЗМЕРА ВСЕГО ТЕКСТА, ЧТО БЫ БЫЛО ДОСТУПНО ИЗМЕНЕНИЕ СТРОК И СТОЛБЦОВ!!!!!!
+"""
 
 # === НАСТРОЙКИ ===
 
-A4_WIDTH_MM, A4_HEIGHT_MM = 210, 297                       # Размер листа A4 в мм
-PAGE_SCALING = 10                                          # Масштабирование страницы
-PAGE_WIDTH = A4_WIDTH_MM * PAGE_SCALING                    # Ширина листа
-PAGE_HEIGHT = A4_HEIGHT_MM * PAGE_SCALING                  # Высота листа
+A4_WIDTH_MM, A4_HEIGHT_MM = 210, 297                         # Размер листа A4 в мм
+PAGE_SCALING = 10                                            # Масштабирование страницы
+PAGE_WIDTH = A4_WIDTH_MM * PAGE_SCALING                      # Ширина листа
+PAGE_HEIGHT = A4_HEIGHT_MM * PAGE_SCALING                    # Высота листа
 
-WIDTH_TAG_FRAME = 4                                        # Ширина рамки ценника
-FONT_NAME = "Arial Bold"                                   # Название основного шрифта
-FONT_FILE_NAME = "arialbd.ttf"                             # Название файла основного шрифта
-FONT_SIZE_TITLE = 32                                       # Размер шрифта для названия товара
+WIDTH_TAG_FRAME = 3                                          # Ширина рамки ценника
 
-START_FONT_SIZE_PRICE = 600                                # Стартовый размер шрифта для цены товара
-START_FONT_SIZE_FRACTIONAL = START_FONT_SIZE_PRICE * 0.50  # Стартовый размер шрифта для копеек от цены товара
-START_FONT_SIZE_UNIT = START_FONT_SIZE_PRICE * 0.30        # Стартовый размер шрифта для единицы измерения товара
+FONT_NAME = "Arial Bold"                                     # Название основного шрифта
+FONT_FILE_NAME = "arialbd.ttf"                               # Название файла основного шрифта
+
+FONT_SIZE_TITLE = 32                                         # Размер шрифта для названия товара
+
+START_FONT_SIZE_PRICE = 160                                  # Стартовый размер шрифта для цены товара
+START_FONT_SIZE_FRAC_AND_RUB = START_FONT_SIZE_PRICE * 0.45  # Стартовый размер шрифта для копеек от цены товара
+START_FONT_SIZE_UNIT = START_FONT_SIZE_PRICE * 0.25          # Стартовый размер шрифта для единицы измерения товара
 
 
 # === ФУНКЦИИ ===
@@ -37,16 +44,24 @@ def choose_file():
         progress_screen_show()
         root.update()
 
-        # Основной алгоритм генерации страниц с ценниками
-        generate_tags(filepath)
+        # Основной алгоритм генерации страниц с ценниками в другом потоке
+        thread = threading.Thread(target=generate_tags_wrapper, args=(filepath,))
+        thread.start()
 
-        # Скрытие экрана прогресса
-        progress_screen_hide()
-        root.update()
-        # Показываем кнопку
-        start_screen_show()
-        root.update()
+def generate_tags_wrapper(filepath):
+    # Основной алгоритм генерации страниц с ценниками
+    generate_tags(filepath)
 
+    # Вернуть обновление GUI в основной поток
+    root.after(0, generation_complete)
+
+def generation_complete():
+    # Скрытие экрана прогресса
+    progress_screen_hide()
+    root.update()
+    # Показываем кнопку
+    start_screen_show()
+    root.update()
 
 def normalize_unit(unit_text):
     unit_text = unit_text.strip().lower()
@@ -70,7 +85,7 @@ def normalize_unit(unit_text):
     return unit_text
 
 
-def draw_wrapped_title_text(draw, text, max_width, max_height, start_x, start_y, margin, line_spacing=5):
+def draw_wrapped_title_text(draw, text, max_width, max_height, start_x, start_y, margin, line_spacing):
     # Учёт отступов
     max_width -= 2 * margin
     max_height -= 2 * margin
@@ -129,7 +144,10 @@ def draw_wrapped_title_text(draw, text, max_width, max_height, start_x, start_y,
         else:
             # Добавляем текущую версию строки
             if current_line:
-                lines.append(current_line)
+                if line_width <= max_width and idx == len(text.split()) - 1:
+                    lines.append(test_line)
+                else:
+                    lines.append(current_line)
 
             # Записываем не поместившееся слово на новую строку
             current_line = word
@@ -157,7 +175,7 @@ def draw_wrapped_title_text(draw, text, max_width, max_height, start_x, start_y,
         y += line_height + line_spacing
 
 
-def draw_price_text(page, price_text, unit, max_width, max_height, start_x, start_y, margin, spacing=15):
+def draw_price_text(page, price_text, unit, max_width, max_height, start_x, start_y, margin, spacing):
     # Учёт отступов
     max_width -= 2 * margin
     max_height -= 2 * margin
@@ -166,49 +184,62 @@ def draw_price_text(page, price_text, unit, max_width, max_height, start_x, star
 
     # Разбор строки цены на части
     if "." in price_text:
-        main_price_part, fractional_price_part = price_text.split(".")
-        fractional_part = fractional_price_part.ljust(2, '0')[:2]  # Гарантируем 2 символа
-        if fractional_part == '00':
-            fractional_part = None
+        main_price_part, frac_part = price_text.split(".")
+        frac_part = frac_part.ljust(2, '0')[:2]  # Гарантируем 2 символа
+        if frac_part == '00':
+            frac_part = None
     else:
         main_price_part = price_text
-        fractional_part = None
+        frac_part = None
+
+    # Текст рубли
+    rub_part = "₽"
 
     # Текст единицы измерения
-    unit_part = f"₽/{normalize_unit(unit)}" if unit else "₽"
+    unit_part = f"/{normalize_unit(unit)}" if unit else ""
 
     # Создаём временное большое изображение
-    temp_width, temp_height = PAGE_WIDTH, PAGE_HEIGHT
+    temp_width, temp_height = int(max_width * 2), int(max_height * 2)
     temp_image = Image.new("RGBA", (temp_width, temp_height), (255, 255, 255, 0))
     temp_draw = ImageDraw.Draw(temp_image)
 
     # Шрифты
     font_main_price_part = ImageFont.truetype(FONT_FILE_NAME, START_FONT_SIZE_PRICE)
-    font_fractional_part = ImageFont.truetype(FONT_FILE_NAME, START_FONT_SIZE_FRACTIONAL)
+    font_frac_and_rub_part = ImageFont.truetype(FONT_FILE_NAME, START_FONT_SIZE_FRAC_AND_RUB)
     font_unit_part = ImageFont.truetype(FONT_FILE_NAME, START_FONT_SIZE_UNIT)
 
-    # Ширина и высота текста основной цены
+    # Ширина текста основной цены
     bbox_main_price_part = temp_draw.textbbox((0, 0), main_price_part, font=font_main_price_part)
     main_price_part_width = bbox_main_price_part[2] - bbox_main_price_part[0]
 
+    # Ширина текста рубли
+    bbox_rub_part = temp_draw.textbbox((0, 0), rub_part, font=font_frac_and_rub_part)
+    rub_part_width = bbox_rub_part[2] - bbox_rub_part[0]
+
     # Получаем ascent для шрифтов для правильной высоты по координатам
     ascent_main_price_part, descent_main_price_part = font_main_price_part.getmetrics()
-    ascent_fractional_part, descent_fractional_part = font_fractional_part.getmetrics()
-    ascent_unit_part, descent_unit_part = font_unit_part.getmetrics()
+    ascent_frac_and_rub_part, descent_frac_and_rub_part = font_frac_and_rub_part.getmetrics()
+    ascent_unit_part, _ = font_unit_part.getmetrics()
 
     # Рисуем основную часть цены
     temp_draw.text((0, 0), main_price_part, font=font_main_price_part, fill="black")
 
     # Рисуем копейки справа от основной цены если они есть
-    if fractional_part:
+    if frac_part:
         temp_draw.text(
-            (main_price_part_width + spacing, descent_main_price_part - descent_fractional_part),
-            fractional_part, font=font_fractional_part, fill="black"
+            (main_price_part_width + spacing, descent_main_price_part - descent_frac_and_rub_part),
+            frac_part, font=font_frac_and_rub_part, fill="black"
         )
 
-    # Рисуем ₽/(ед.и.) справа от основной цены
+    # Рисуем ₽ справа от основной цены
     temp_draw.text(
-        (main_price_part_width + spacing, ascent_main_price_part - ascent_unit_part),
+        (main_price_part_width + spacing, ascent_main_price_part - ascent_frac_and_rub_part),
+        rub_part, font=font_frac_and_rub_part, fill="black"
+    )
+
+    # Рисуем единицу измерения справа от основной цены
+    temp_draw.text(
+        (main_price_part_width + spacing + rub_part_width, ascent_main_price_part - ascent_unit_part),
         unit_part, font=font_unit_part, fill="black"
     )
 
@@ -216,7 +247,7 @@ def draw_price_text(page, price_text, unit, max_width, max_height, start_x, star
     temp_bbox = temp_image.getbbox()
     temp_image = temp_image.crop(temp_bbox)
 
-    # Теперь уменьшаем до нужного размера --------------------------------------------------------------- ИЗМЕНИТЬ!!!!!!
+    # Теперь уменьшаем до нужного размера
     temp_image.thumbnail((max_width, max_height), Image.Resampling.LANCZOS)
 
     # Вставляем на ценник по правому краю по центру
@@ -242,10 +273,10 @@ def generate_tags(filepath):
         tags_per_row, tags_per_col, margin = get_user_settings()
 
         # Размеры
-        max_tags_per_page = tags_per_row * tags_per_col              # Максимальное количество ценников на страницу
-        page_margin = margin * PAGE_SCALING                          # Размер отступа
-        tag_width = (PAGE_WIDTH - 2 * page_margin) / tags_per_row    # Ширина ценника
-        tag_height = (PAGE_HEIGHT - 2 * page_margin) / tags_per_col  # Длина ценника
+        max_tags_per_page = tags_per_row * tags_per_col               # Максимальное количество ценников на страницу
+        page_margin = margin * PAGE_SCALING                           # Размер отступа
+        tag_width = (PAGE_WIDTH - 2 * page_margin) // tags_per_row    # Ширина ценника
+        tag_height = (PAGE_HEIGHT - 2 * page_margin) // tags_per_col  # Длина ценника
 
         # Прочее
         current_tag = 0           # Количество записанных ценников
@@ -253,12 +284,12 @@ def generate_tags(filepath):
 
         for idx, (name, unit, price) in enumerate(items):
             # Расположение ценника
-            col = current_tag % tags_per_row  # Столбец
+            col = current_tag % tags_per_row                    # Столбец
             row = (current_tag // tags_per_row) % tags_per_col  # Ряд
 
             # Координатное расположение ценника
-            x = page_margin + col * tag_width
-            y = page_margin + row * tag_height
+            x = (page_margin - tags_per_col // 2) + col * (tag_width + 1)
+            y = (page_margin - tags_per_row // 2) + row * (tag_height + 1)
 
             # Рамка ценника
             draw.rectangle([x, y, x + tag_width, y + tag_height], outline="black", width=WIDTH_TAG_FRAME)
@@ -277,7 +308,8 @@ def generate_tags(filepath):
                 tag_height / 2,      # Половина высоты ценника под название
                 x,                   # Начальная позиция X
                 y,                   # Начальная позиция Y
-                15                   # Отступ от краёв ценника
+                15,                  # Отступ от краёв ценника
+                5                    # Промежуток между строками
             )
 
             # -=-=-=-=-=-=-=-=-=-=-=-=-=-=- Отрисовка цены товара -=-=-=-=-=-=-=-=-=-=-=-=-=-=-
@@ -289,7 +321,8 @@ def generate_tags(filepath):
                 tag_height / 2,      # Половина высоты ценника под цену
                 x,                   # Начальная позиция X
                 y + tag_height / 2,  # Начальная позиция Y
-                20                   # Отступ от краёв ценника
+                20,                  # Отступ от краёв ценника
+                10                   # Промежуток между ценой и блоком с копейками и единицей измерения
             )
 
             # +1 созданный ценник
