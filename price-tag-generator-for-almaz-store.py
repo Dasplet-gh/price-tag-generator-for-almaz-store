@@ -72,12 +72,12 @@ BASE_TAG_4X4_HEIGHT = (PAGE_HEIGHT - 2 * BASE_CONFIG["PAGE_MARGIN"] * PAGE_SCALI
 # Расчёт базовых размеров именной части эталонного ценника
 BASE_TITLE_PART_MARGIN_PX = int(MARGIN_TITLE_PART_PERC * BASE_TAG_4X4_WIDTH)
 BASE_TITLE_PART_WIDTH = BASE_TAG_4X4_WIDTH - 2 * BASE_TITLE_PART_MARGIN_PX
-BASE_TITLE_PART_HEIGHT = (BASE_TAG_4X4_HEIGHT - 2 * BASE_TITLE_PART_MARGIN_PX) // 2
+BASE_TITLE_PART_HEIGHT = (BASE_TAG_4X4_HEIGHT // 2 - 2 * BASE_TITLE_PART_MARGIN_PX)
 
 # Расчёт базовых размеров ценовой части эталонного ценника
 BASE_PRICE_PART_MARGIN_PX = int(MARGIN_PRICE_PART_PERC * BASE_TAG_4X4_WIDTH)
 BASE_PRICE_PART_WIDTH = BASE_TAG_4X4_WIDTH - 2 * BASE_PRICE_PART_MARGIN_PX
-BASE_PRICE_PART_HEIGHT = (BASE_TAG_4X4_HEIGHT - 2 * BASE_PRICE_PART_MARGIN_PX) // 2
+BASE_PRICE_PART_HEIGHT = (BASE_TAG_4X4_HEIGHT // 2 - 2 * BASE_PRICE_PART_MARGIN_PX)
 
 # === ОСНОВНЫЕ ФУНКЦИИ ===
 
@@ -122,7 +122,9 @@ def draw_title_text(draw, text, max_width, max_height, start_x, start_y, margin_
     start_y += margin_px
 
     # Вычисление размера шрифта
-    font_title = BASE_CONFIG["FONT_SIZE_TITLE"] * max_width / BASE_TITLE_PART_WIDTH * PAGE_SCALING
+    font_title = (BASE_CONFIG["FONT_SIZE_TITLE"] *
+                  (max_width / BASE_TITLE_PART_WIDTH + max_height / BASE_TITLE_PART_HEIGHT) // 2
+                  * PAGE_SCALING)
 
     # Шрифт
     font = ImageFont.truetype(FONT_FILE_NAME, font_title)
@@ -181,14 +183,12 @@ def draw_title_text(draw, text, max_width, max_height, start_x, start_y, margin_
             y -= line_height
         else:
             # Добавляем строку
-            if current_line:
-                if line_width <= max_width and idx == len(text.split()) - 1:
-                    lines.append(new_line_version)
-                elif line_width > max_width and idx == len(text.split()) - 1:
-                    lines.append(current_line)
+            if line_width <= max_width and idx == len(text.split()) - 1:
+                lines.append(new_line_version)
+            else:
+                lines.append(current_line)
+                if line_width > max_width and idx == len(text.split()) - 1:
                     lines.append(word)
-                else:
-                    lines.append(current_line)
 
             # Записываем не поместившееся слово на новую строку
             current_line = word
@@ -309,8 +309,11 @@ def draw_price_text(page, price_text, unit, max_width, max_height, start_x, star
 
     # Уменьшаем до нужного размера, если выходит за рамки (на всякий случай)
     if temp_image.width > max_width or temp_image.height > max_height:
+        temp_height = temp_image.height # Временное сохранение temp_image.height
         temp_image.thumbnail((max_width, max_height), Image.Resampling.LANCZOS)
-        price_part_height = max_height
+        # Если изначально не поместилось по высоте, то перезаписывает высоту цены для дальнейших расчётов
+        if temp_height > max_height:
+            price_part_height = temp_image.getbbox()[3]
 
     # Центральная линия, на которую должны "садиться" все цены (независимо от их высоты и ширины)
     price_center_y = start_y + price_part_height // 2
@@ -345,6 +348,9 @@ def generate_tags(filepath):
         width_tag_frame_px = width_tag_frame * PAGE_SCALING // 10  # Размер рамки в пикселях
         tag_width = (PAGE_WIDTH - 2 * page_margin_px) // columns   # Ширина ценника
         tag_height = (PAGE_HEIGHT - 2 * page_margin_px) // rows    # Длина ценника
+
+        # Проверка на слишком узкие/тонкие ценники
+        assert abs(rows - columns) <= 8, "Ценники слишком узкие/тонкие"
 
         # Новое вычисление отступов для ровного расположения (из-за целочисленного счёта)
         start_x = (PAGE_WIDTH - tag_width * columns) // 2
