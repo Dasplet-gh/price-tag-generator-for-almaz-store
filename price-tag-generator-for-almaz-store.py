@@ -6,6 +6,8 @@ import threading
 import sys
 import os
 
+# Version 1.3
+
 # === ОСНОВНЫЕ НАСТРОЙКИ ===
 
 # Окно
@@ -72,7 +74,7 @@ BASE_TAG_4X4_HEIGHT = (PAGE_HEIGHT - 2 * BASE_CONFIG["PAGE_MARGIN"] * PAGE_SCALI
 # Расчёт базовых размеров именной части эталонного ценника
 BASE_TITLE_PART_MARGIN_PX = int(MARGIN_TITLE_PART_PERC * BASE_TAG_4X4_WIDTH)
 BASE_TITLE_PART_WIDTH = BASE_TAG_4X4_WIDTH - 2 * BASE_TITLE_PART_MARGIN_PX
-BASE_TITLE_PART_HEIGHT = (BASE_TAG_4X4_HEIGHT // 2 - 2 * BASE_TITLE_PART_MARGIN_PX)
+BASE_TITLE_PART_HEIGHT = (BASE_TAG_4X4_HEIGHT // 2 - 1 * BASE_TITLE_PART_MARGIN_PX) # 2 * BASE_TITLE_PART_MARGIN_PX
 
 # Расчёт базовых размеров ценовой части эталонного ценника
 BASE_PRICE_PART_MARGIN_PX = int(MARGIN_PRICE_PART_PERC * BASE_TAG_4X4_WIDTH)
@@ -117,14 +119,12 @@ def draw_title_text(draw, text, max_width, max_height, start_x, start_y, margin_
 
     # Учёт отступов
     max_width -= 2 * margin_px
-    max_height -= 2 * margin_px
+    max_height -= 1 * margin_px # 2 * margin_px (не учитываем нижний отступ для большей вместительности текста)
     start_x += margin_px
     start_y += margin_px
 
     # Вычисление размера шрифта
-    font_title = (BASE_CONFIG["FONT_SIZE_TITLE"] *
-                  (max_width / BASE_TITLE_PART_WIDTH + max_height / BASE_TITLE_PART_HEIGHT) // 2
-                  * PAGE_SCALING)
+    font_title = BASE_CONFIG["FONT_SIZE_TITLE"] * max_width / BASE_TITLE_PART_WIDTH * PAGE_SCALING
 
     # Шрифт
     font = ImageFont.truetype(FONT_FILE_NAME, font_title)
@@ -150,7 +150,7 @@ def draw_title_text(draw, text, max_width, max_height, start_x, start_y, margin_
 
         # Ширина и высота получившейся строки
         bbox = draw.textbbox((0, 0), new_line_version, font=font)
-        line_width = bbox[2] - bbox[0]
+        new_line_width = bbox[2] - bbox[0]
 
         # Продвижение позиции по Y для проверки
         y += line_height
@@ -175,26 +175,32 @@ def draw_title_text(draw, text, max_width, max_height, start_x, start_y, margin_
             # Останавливаем генерацию списка
             break
 
-        # Если строка не вышла за рамки по ширине и это не последнее слово
-        if line_width <= max_width and idx < len(text.split()) - 1:
-            # Заменяем текущую строку на новую
-            current_line = new_line_version
-            # Откатываем продвижение позиции по Y
-            y -= line_height
-        else:
-            # Добавляем строку
-            if line_width <= max_width and idx == len(text.split()) - 1:
+        # Если строка не вышла за рамки по ширине
+        if new_line_width <= max_width:
+            # Если это последнее слово
+            if idx == len(text.split()) - 1:
+                # Записываем новую строку в список
                 lines.append(new_line_version)
+
+                # Останавливаем генерацию списка
+                break
             else:
-                lines.append(current_line)
-                if line_width > max_width and idx == len(text.split()) - 1:
-                    lines.append(word)
+                # Заменяем текущую строку на новую
+                current_line = new_line_version
+                # Откатываем продвижение позиции по Y
+                y -= line_height
+        else:
+            # Добавляем текущую строку
+            lines.append(current_line)
 
-            # Записываем не поместившееся слово на новую строку
-            current_line = word
-
-            # Продвижение позиции по Y
-            y += line_spacing_px
+            # Если это последнее слово, записываем его в список, если помещается по высоте
+            if idx == len(text.split()) - 1 and y + line_spacing_px + line_height <= max_height:
+                lines.append(word)
+            else:
+                # Записываем не поместившееся слово на новую строку
+                current_line = word
+                # Продвижение позиции по Y
+                y += line_spacing_px
 
     # Координатное расположение по X и Y
     x = start_x  # Выравнивание по левому краю
