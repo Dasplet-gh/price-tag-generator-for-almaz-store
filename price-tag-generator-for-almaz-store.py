@@ -3,6 +3,7 @@ from tkinter import filedialog, messagebox, ttk
 from PIL import Image, ImageDraw, ImageFont
 import pandas as pd
 import threading
+import sys
 import os
 
 # === ОСНОВНЫЕ НАСТРОЙКИ ===
@@ -10,7 +11,7 @@ import os
 # Окно
 WINDOW_NAME = "Генератор ценников для магазина Алмаз"  # Название окна
 WINDOW_SIZE = "800x140"                                # Фиксированный размер окна
-WINDOW_ICO = "Almaz.ico"                               # Путь к иконке окна
+WINDOW_ICO = "almaz.ico"                               # Путь к иконке окна
 
 # Настройки чтения таблицы
 COLUMN_NUMBERS_IN_PRODUCT_TABLE = [0, 2, 6]            # Номера нужных столбцов в таблице товаров
@@ -56,12 +57,12 @@ FONT_STYLES = {
 
 # Предустановленные базовые размеры
 BASE_CONFIG = {
-    "FONT_SIZE_TITLE": 3,                              # Базовый размер шрифта именной части ценника
-    "FONT_SIZE_PRICE": 14,                             # Базовый размер шрифта ценовой части ценника
+    "FONT_SIZE_TITLE": 4,                              # Базовый размер шрифта именной части ценника
+    "FONT_SIZE_PRICE": 18,                             # Базовый размер шрифта ценовой части ценника
     "ROWS": 4,                                         # Базовое количество строк
     "COLUMNS": 4,                                      # Базовое количество столбцов
-    "WIDTH_FRAME_TAG": 3,                              # Базовый размер рамки ценника
-    "PAGE_MARGIN": 10,                                 # Базовый размер отступа в мм
+    "WIDTH_FRAME_TAG": 1,                              # Базовый размер рамки ценника
+    "PAGE_MARGIN": 5,                                  # Базовый размер отступа в мм
 }
 
 # Расчёт базовых размеров эталонного ценника при базовых настройках
@@ -77,7 +78,6 @@ BASE_TITLE_PART_HEIGHT = (BASE_TAG_4X4_HEIGHT - 2 * BASE_TITLE_PART_MARGIN_PX) /
 BASE_PRICE_PART_MARGIN_PX = int(MARGIN_PRICE_PART_PERC * BASE_TAG_4X4_WIDTH)
 BASE_PRICE_PART_WIDTH = BASE_TAG_4X4_WIDTH - 2 * BASE_PRICE_PART_MARGIN_PX
 BASE_PRICE_PART_HEIGHT = (BASE_TAG_4X4_HEIGHT - 2 * BASE_PRICE_PART_MARGIN_PX) // 2
-
 
 # === ОСНОВНЫЕ ФУНКЦИИ ===
 
@@ -97,7 +97,6 @@ def choose_file():
         thread = threading.Thread(target=generate_tags_wrapper, args=(filepath,))
         thread.start()
 
-
 # -=-=-=- Начало генерации -=-=-=-
 def generate_tags_wrapper(filepath):
     # Запуск основного алгоритма
@@ -105,13 +104,11 @@ def generate_tags_wrapper(filepath):
     # Возврат в основной поток для обновления GUI
     root.after(0, generation_complete)
 
-
 # -=-=-=- Завершение генерации -=-=-=-
 def generation_complete():
     # Обновления GUI
     progress_screen_hide()
     start_screen_show()
-
 
 # -=-=-=- Отрисовка области с названием товара на ценнике -=-=-=-
 def draw_title_text(draw, text, max_width, max_height, start_x, start_y, margin_perc):
@@ -183,10 +180,13 @@ def draw_title_text(draw, text, max_width, max_height, start_x, start_y, margin_
             # Откатываем продвижение позиции по Y
             y -= line_height
         else:
-            # Добавляем текущую версию строки
+            # Добавляем строку
             if current_line:
                 if line_width <= max_width and idx == len(text.split()) - 1:
                     lines.append(new_line_version)
+                elif line_width > max_width and idx == len(text.split()) - 1:
+                    lines.append(current_line)
+                    lines.append(word)
                 else:
                     lines.append(current_line)
 
@@ -206,7 +206,6 @@ def draw_title_text(draw, text, max_width, max_height, start_x, start_y, margin_
         draw.text((x, y), line, fill="black", font=font)
         # Продвижение позиции по Y
         y += line_height + line_spacing_px
-
 
 # -=-=-=- Отрисовка области с ценой товара на ценнике -=-=-=-
 def draw_price_text(page, price_text, unit, max_width, max_height, start_x, start_y, margin_perc):
@@ -252,10 +251,15 @@ def draw_price_text(page, price_text, unit, max_width, max_height, start_x, star
     font_frac_and_rub_part = ImageFont.truetype(FONT_FILE_NAME, font_size_frac_and_rub_part)
     font_unit_part = ImageFont.truetype(FONT_FILE_NAME, font_size_unit_part)
 
+    # Получаем ascent и descent шрифтов для правильной высоты по координатам
+    ascent_price_part, descent_price_part = font_price_part.getmetrics()
+    ascent_frac_and_rub_part, descent_frac_and_rub_part = font_frac_and_rub_part.getmetrics()
+    ascent_unit_part, _ = font_unit_part.getmetrics()
+
     # Ширина и высота текста основной цены
     bbox_price_part = temp_draw.textbbox((0, 0), price_part, font=font_price_part)
     price_part_width = bbox_price_part[2] - bbox_price_part[0]
-    price_part_height = bbox_price_part[3] - bbox_price_part[1]
+    price_part_height = ascent_price_part + descent_price_part
 
     # Ширина текста с символом рублей
     bbox_rub_part = temp_draw.textbbox((0, 0), rub_part, font=font_frac_and_rub_part)
@@ -264,11 +268,6 @@ def draw_price_text(page, price_text, unit, max_width, max_height, start_x, star
     # Ширина текста единицы измерения
     bbox_unit_part = temp_draw.textbbox((0, 0), unit_part, font=font_unit_part)
     unit_part_width = bbox_unit_part[2] - bbox_unit_part[0]
-
-    # Получаем ascent и descent шрифтов для правильной высоты по координатам
-    ascent_price_part, descent_price_part = font_price_part.getmetrics()
-    ascent_frac_and_rub_part, descent_frac_and_rub_part = font_frac_and_rub_part.getmetrics()
-    ascent_unit_part, _ = font_unit_part.getmetrics()
 
     # Расчёт промежутка между ценой и блоком с копейками в пикселях
     spacing = rub_part_width * SPACING_PRICE_PART_PERC
@@ -311,14 +310,17 @@ def draw_price_text(page, price_text, unit, max_width, max_height, start_x, star
     # Уменьшаем до нужного размера, если выходит за рамки (на всякий случай)
     if temp_image.width > max_width or temp_image.height > max_height:
         temp_image.thumbnail((max_width, max_height), Image.Resampling.LANCZOS)
+        price_part_height = max_height
 
-    # Вставляем на ценник по правому краю по центру
+    # Центральная линия, на которую должны "садиться" все цены (независимо от их высоты и ширины)
+    price_center_y = start_y + price_part_height // 2
+
+    # Вставляем по правому краю, центрируя по вертикали
     page.paste(
         temp_image,
-        (int(start_x + (max_width - temp_image.width)), int(start_y + (max_height - temp_image.height) / 2)),
+        (int(start_x + (max_width - temp_image.width)), int(price_center_y - (temp_image.height // 2))),
         temp_image
     )
-
 
 # -=-=-=- Генерация и сохранение страниц с ценниками -=-=-=-
 def generate_tags(filepath):
@@ -421,14 +423,21 @@ def generate_tags(filepath):
             messagebox.showwarning("Отмена", "Сохранение отменено.")
             return
 
+        # Установка курсора в "ожидание"
+        root.config(cursor="watch")
+        root.update()
+
         # Сохранение страниц в виде png файлов
         for i, page in enumerate(pages, start=1):
             page.save(os.path.join(save_folder, f"Ценники {i}.png"))
 
+        # Возвращаем обычный курсор
+        root.config(cursor="")
+        root.update()
+
         messagebox.showinfo("Успех", f"Сохранено {len(pages)} страниц!")
     except Exception as e:
         messagebox.showerror("Ошибка", str(e))
-
 
 # === ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ===
 
@@ -455,7 +464,6 @@ def normalize_unit(unit_text):
     # Если ничего не нашли, вернуть как есть
     return unit_text
 
-
 # -=-=-=- Получение пользовательских данных из полей -=-=-=-
 def get_user_settings():
     return (
@@ -464,7 +472,6 @@ def get_user_settings():
         width_tag_frame_var.get(),  # Размер рамки ценника
         margin_var.get()            # Размер отступа в мм
     )
-
 
 # -=-=-=- Включение/показ стартового экрана -=-=-=-
 def start_screen_show(boxes_pad=30):
@@ -484,7 +491,6 @@ def start_screen_show(boxes_pad=30):
 
     root.update()
 
-
 # -=-=-=- Отключение/скрытие стартового экрана -=-=-=-
 def start_screen_hide():
     btn.pack_forget()
@@ -503,18 +509,23 @@ def start_screen_hide():
 
     root.update()
 
-
 # -=-=-=- Включение/показ экрана прогресса -=-=-=-
 def progress_screen_show():
     progress_label.pack(anchor="center")
     root.update()
-
 
 # -=-=-=- Отключение/скрытие экрана прогресса -=-=-=-
 def progress_screen_hide():
     progress_label.pack_forget()
     root.update()
 
+# -=-=-=- Возвращает абсолютный путь к ресурсу при запуске из .exe или .py -=-=-=-
+def resource_path(relative_path: str) -> str:
+    try:
+        base_path = sys._MEIPASS
+    except AttributeError:
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, relative_path)
 
 # === GUI: ОСНОВНОЕ ОКНО ===
 
@@ -523,7 +534,7 @@ root = tkinter.Tk()
 root.title(WINDOW_NAME)
 root.geometry(WINDOW_SIZE)
 root.configure(bg="#f0f0f0")
-root.iconbitmap(WINDOW_ICO)
+root.iconbitmap(resource_path(WINDOW_ICO))
 root.resizable(False, False)
 
 # === GUI: СТАРТОВЫЙ ЭКРАН ===
