@@ -6,7 +6,11 @@ import threading
 import sys
 import os
 
-# Version 1.3
+"""
+# === Version 1.3.1 === #
+"""
+
+print("=== Программа запустилась ===")
 
 # === ОСНОВНЫЕ НАСТРОЙКИ ===
 
@@ -74,7 +78,7 @@ BASE_TAG_4X4_HEIGHT = (PAGE_HEIGHT - 2 * BASE_CONFIG["PAGE_MARGIN"] * PAGE_SCALI
 # Расчёт базовых размеров именной части эталонного ценника
 BASE_TITLE_PART_MARGIN_PX = int(MARGIN_TITLE_PART_PERC * BASE_TAG_4X4_WIDTH)
 BASE_TITLE_PART_WIDTH = BASE_TAG_4X4_WIDTH - 2 * BASE_TITLE_PART_MARGIN_PX
-BASE_TITLE_PART_HEIGHT = (BASE_TAG_4X4_HEIGHT // 2 - 1 * BASE_TITLE_PART_MARGIN_PX) # 2 * BASE_TITLE_PART_MARGIN_PX
+BASE_TITLE_PART_HEIGHT = (BASE_TAG_4X4_HEIGHT // 2 - 1 * BASE_TITLE_PART_MARGIN_PX) # Учёт только верхнего отступа
 
 # Расчёт базовых размеров ценовой части эталонного ценника
 BASE_PRICE_PART_MARGIN_PX = int(MARGIN_PRICE_PART_PERC * BASE_TAG_4X4_WIDTH)
@@ -119,15 +123,15 @@ def draw_title_text(draw, text, max_width, max_height, start_x, start_y, margin_
 
     # Учёт отступов
     max_width -= 2 * margin_px
-    max_height -= 1 * margin_px # 2 * margin_px (не учитываем нижний отступ для большей вместительности текста)
+    max_height -= 1 * margin_px # Учёт только верхнего отступа для большей вместительности текста
     start_x += margin_px
     start_y += margin_px
 
     # Вычисление размера шрифта
-    font_title = BASE_CONFIG["FONT_SIZE_TITLE"] * max_width / BASE_TITLE_PART_WIDTH * PAGE_SCALING
+    font_title = int(BASE_CONFIG["FONT_SIZE_TITLE"] * max_width / BASE_TITLE_PART_WIDTH * PAGE_SCALING)
 
     # Шрифт
-    font = ImageFont.truetype(FONT_FILE_NAME, font_title)
+    font = ImageFont.truetype(resource_path(FONT_FILE_NAME), font_title)
 
     # Расчёт высоты строки
     ascent, descent = font.getmetrics()
@@ -246,16 +250,16 @@ def draw_price_text(page, price_text, unit, max_width, max_height, start_x, star
     temp_draw = ImageDraw.Draw(temp_image)
 
     # Вычисление размера основного шрифта
-    font_size_price_part = BASE_CONFIG["FONT_SIZE_PRICE"] * max_width / BASE_PRICE_PART_WIDTH * PAGE_SCALING
+    font_size_price_part = int(BASE_CONFIG["FONT_SIZE_PRICE"] * max_width / BASE_PRICE_PART_WIDTH * PAGE_SCALING)
 
     # Расчёт меньших шрифтов относительно основного
-    font_size_frac_and_rub_part = font_size_price_part * FONT_SIZE_PERC_FRAC_AND_RUB
-    font_size_unit_part = font_size_price_part * FONT_SIZE_PERC_UNIT
+    font_size_frac_and_rub_part = int(font_size_price_part * FONT_SIZE_PERC_FRAC_AND_RUB)
+    font_size_unit_part = int(font_size_price_part * FONT_SIZE_PERC_UNIT)
 
     # Шрифты
-    font_price_part = ImageFont.truetype(FONT_FILE_NAME, font_size_price_part)
-    font_frac_and_rub_part = ImageFont.truetype(FONT_FILE_NAME, font_size_frac_and_rub_part)
-    font_unit_part = ImageFont.truetype(FONT_FILE_NAME, font_size_unit_part)
+    font_price_part = ImageFont.truetype(resource_path(FONT_FILE_NAME), font_size_price_part)
+    font_frac_and_rub_part = ImageFont.truetype(resource_path(FONT_FILE_NAME), font_size_frac_and_rub_part)
+    font_unit_part = ImageFont.truetype(resource_path(FONT_FILE_NAME), font_size_unit_part)
 
     # Получаем ascent и descent шрифтов для правильной высоты по координатам
     ascent_price_part, descent_price_part = font_price_part.getmetrics()
