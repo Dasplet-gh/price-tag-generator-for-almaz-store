@@ -5,12 +5,12 @@ import pandas as pd
 import threading
 import sys
 import os
+# Для старого PyInstaller
+import openpyxl
 
 """
-# === Version 1.3.1 === #
+# === Version 1.4 (stable version) === #
 """
-
-print("=== Программа запустилась ===")
 
 # === ОСНОВНЫЕ НАСТРОЙКИ ===
 
@@ -30,7 +30,7 @@ PAGE_HEIGHT = A4_HEIGHT_MM * PAGE_SCALING              # Высота листа
 
 # Названия основного шрифта
 FONT_NAME = "Arial Bold"                               # Название основного шрифта
-FONT_FILE_NAME = "arialbd.ttf"                         # Название файла основного шрифта
+FONT_FILE_NAME = "arial_bold.ttf"                      # Название файла основного шрифта
 
 # Отступы и промежутки в тексте ценника в %
 MARGIN_TITLE_PART_PERC = 0.05                          # Отступ в % от краёв ценника в именной части
